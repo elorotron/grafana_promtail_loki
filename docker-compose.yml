@@ -1,0 +1,79 @@
+version: "3"
+
+networks:
+  loki:
+
+services:
+  loki:
+    image: grafana/loki:2.9.0
+    container_name: loki
+    ports:
+      - "3100:3100"
+    command: -config.file=/etc/loki/loki-config.yml
+    networks:
+      - loki
+    restart: always
+    volumes:
+      - ./configs/loki:/etc/loki
+
+  promtail:
+    image: grafana/promtail:2.9.0
+    container_name: promtail
+    volumes:
+      - /var/log:/var/log
+      - ./configs/promtail:/etc/promtail
+    command: -config.file=/etc/promtail/promtail-config.yml
+    networks:
+      - loki
+    restart: always
+    depends_on:
+      - loki
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: grafana
+    environment:
+      - GF_PATHS_PROVISIONING=/etc/grafana/provisioning
+      - GF_AUTH_ANONYMOUS_ENABLED=true
+      - GF_AUTH_ANONYMOUS_ORG_ROLE=Admin
+    entrypoint:
+      - sh
+      - -euc
+      - |
+        mkdir -p /etc/grafana/provisioning/datasources
+        cat <<EOF > /etc/grafana/provisioning/datasources/ds.yaml
+        apiVersion: 1
+        datasources:
+        - name: Loki
+          type: loki
+          access: proxy
+          orgId: 1
+          url: http://loki:3100
+          basicAuth: false
+          isDefault: true
+          version: 1
+          editable: false
+        EOF
+        /run.sh
+    ports:
+      - "3000:3000"
+    restart: always
+    networks:
+      - loki
+
+  # nginx:
+  #   image: nginx:1.25.3-alpine-slim
+  #   container_name: nginx
+  #   ports:
+  #     - "80:80"
+  #   restart: always
+  #   networks:
+  #     - loki
+  #   # logging:
+  #   #   driver: json-file
+  #   #   options:
+  #   #     max-size: "10m"
+  #   #     max-file: "3"
+  #   labels:
+  #     logging: "promtail"
+  #     logging_jobname: "containerlogs"
