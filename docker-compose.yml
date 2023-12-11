@@ -22,6 +22,8 @@ services:
     volumes:
       - /var/log:/var/log
       - ./configs/promtail:/etc/promtail
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+      - /var/run/docker.sock:/var/run/docker.sock
     command: -config.file=/etc/promtail/promtail-config.yml
     networks:
       - loki
@@ -32,10 +34,13 @@ services:
   grafana:
     image: grafana/grafana:latest
     container_name: grafana
+    #volumes:
+    #  - ./configs/grafana/grafana-datasources.yml:/etc/grafana/provisioning/datasources/datasources.yaml
     environment:
       - GF_PATHS_PROVISIONING=/etc/grafana/provisioning
       - GF_AUTH_ANONYMOUS_ENABLED=true
       - GF_AUTH_ANONYMOUS_ORG_ROLE=Admin
+      - GF_AUTH_DISABLE_LOGIN_FORM=true
     entrypoint:
       - sh
       - -euc
@@ -47,12 +52,10 @@ services:
         - name: Loki
           type: loki
           access: proxy
-          orgId: 1
           url: http://loki:3100
-          basicAuth: false
-          isDefault: true
           version: 1
           editable: false
+          isDefault: true
         EOF
         /run.sh
     ports:
@@ -61,19 +64,31 @@ services:
     networks:
       - loki
 
-  # nginx:
-  #   image: nginx:1.25.3-alpine-slim
-  #   container_name: nginx
+  nginx:
+    image: nginx:latest
+    container_name: nginx
+    ports:
+      - "80:80"
+    restart: always
+    networks:
+      - loki
+    # logging:
+    #   driver: json-file
+    #   options:
+    #     max-size: "10m"
+    #     max-file: "3"
+    labels:
+      logging: "promtail"
+      logging_jobname: "containerlogs"
+
+  # tomcat:
+  #   image: tomcat:8.0
+  #   container_name: tomcat
   #   ports:
-  #     - "80:80"
+  #     - "8080:8080"
   #   restart: always
   #   networks:
   #     - loki
-  #   # logging:
-  #   #   driver: json-file
-  #   #   options:
-  #   #     max-size: "10m"
-  #   #     max-file: "3"
   #   labels:
   #     logging: "promtail"
   #     logging_jobname: "containerlogs"
